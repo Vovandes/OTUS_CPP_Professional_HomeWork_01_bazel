@@ -1,0 +1,46 @@
+name: 'C++ CI'
+
+on:
+  push:
+    branches:
+      - main
+      - feature/github_actions
+
+jobs:
+  bazel:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Setup bazel
+      uses: jwlawson/actions-setup-bazel@v1
+    - name: Use bazel
+      run: bazel --version
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      - run: ./update_patch_version.sh ${{ github.run_number }}
+      - run: bazel build //main:helloworld_cli
+      - run: bazel test //...
+      - run: bazel build //pkg:helloworld-debian
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.run_number }}
+          release_name: Release ${{ github.run_number }}
+          draft: false
+          prerelease: false
+      - name: Upload Release Asset
+        id: upload-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: bazel-bin/pkg/helloworld_0.0.${{ github.run_number }}_amd64.deb
+          asset_name: helloworld_0.0.${{ github.run_number }}_amd64.deb
+          asset_content_type: application/vnd.debian.binary-package
